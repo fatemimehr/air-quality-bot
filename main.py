@@ -1,8 +1,3 @@
-# --- کتابخانه‌های جدید اضافه شده ---
-from flask import Flask
-from threading import Thread
-# ------------------------------------
-
 import logging
 import io
 import os
@@ -18,30 +13,46 @@ from telegram.ext import (
     filters,
 )
 
+# --- کتابخانه‌های جدید ---
+from flask import Flask
+from threading import Thread
+import sqlalchemy
+from sqlalchemy import create_engine, text
+
+# --- شناسه عددی ادمین ---
+ADMIN_ID = 123456789  # <--- !!! مهم: این عدد را با شناسه خودتان جایگزین کنید
+
+# --- اتصال به پایگاه داده Supabase (PostgreSQL) ---
+db_engine = None
+try:
+    DATABASE_URL = os.environ.get("DATABASE_URL")
+    if not DATABASE_URL:
+        print("Warning: DATABASE_URL not found. Stats will not be saved.")
+    else:
+        # Supabase URL starts with postgresql:// but SQLAlchemy needs postgresql+psycopg2://
+        if DATABASE_URL.startswith("postgresql://"):
+            DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
+        db_engine = create_engine(DATABASE_URL)
+        print("Successfully connected to the database.")
+except Exception as e:
+    print(f"Error connecting to database: {e}")
+# ---------------------------------------------
+
 # --- بخش وب سرور برای بیدار نگه داشتن ربات ---
 app = Flask('')
-
 @app.route('/')
-def home():
-    return "I'm alive!"
-
-def run_flask():
-  app.run(host='0.0.0.0', port=8080)
-
+def home(): return "I'm alive!"
+def run_flask(): app.run(host='0.0.0.0', port=8080)
 def keep_alive():
     t = Thread(target=run_flask)
     t.start()
-# -----------------------------------------
-
 
 # Enable logging
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
-)
+logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# (بقیه کد علمی و توابع محاسبه غلظت بدون هیچ تغییری در اینجا قرار می‌گیرند)
-# ... (The rest of the scientific code and concentration calculation functions go here without any changes)
+# (تمام توابع علمی و محاسبه غلظت بدون هیچ تغییری در اینجا قرار می‌گیرند)
+# ... (کد این بخش برای کوتاهی حذف شده، همانند قبل است)
 def get_rural_pasquill_gifford_params_c_d(stability_class):
     params = {'A':{'c':24.1670,'d':2.5334},'B':{'c':18.3330,'d':1.8096},'C':{'c':12.5000,'d':1.0857},'D':{'c':8.3330,'d':0.72382},'E':{'c':6.2500,'d':0.54287},'F':{'c':4.1667,'d':0.36191}}
     return params.get(stability_class)
@@ -101,10 +112,7 @@ def calculate_concentration(
     trace_log = ""
     g = 9.8
     if x_receptor <= 0: return 0.0, "فاصله x باید مثبت باشد."
-    p_exponent_map = {
-        'rural': {'A': 0.07, 'B': 0.07, 'C': 0.10, 'D': 0.15, 'E': 0.35, 'F': 0.55},
-        'urban': {'A': 0.15, 'B': 0.15, 'C': 0.20, 'D': 0.25, 'E': 0.30, 'F': 0.30}
-    }
+    p_exponent_map = {'rural':{'A':0.07,'B':0.07,'C':0.10,'D':0.15,'E':0.35,'F':0.55},'urban':{'A':0.15,'B':0.15,'C':0.20,'D':0.25,'E':0.30,'F':0.30}}
     p = p_exponent_map[area_type][stability_class]
     us = u_ref * (hs_stack_height / z_ref) ** p
     if us == 0: us = 1e-6
@@ -211,10 +219,9 @@ def calculate_concentration(
     V = term1 + term2
     summation_term = 0
     for i in range(1, 6):
-        H1 = z_receptor - (2 * i * Hm_boundary_layer - he); H2 = z_receptor + (2 * i * Hm_boundary_layer - he)
-        H3 = z_receptor - (2 * i * Hm_boundary_layer + he); H4 = z_receptor + (2 * i * Hm_boundary_layer + he)
-        summation_term += (np.exp(-0.5 * (H1 / sigma_ze)**2) + np.exp(-0.5 * (H2 / sigma_ze)**2) +
-                           np.exp(-0.5 * (H3 / sigma_ze)**2) + np.exp(-0.5 * (H4 / sigma_ze)**2))
+        H1 = z_receptor-(2*i*Hm_boundary_layer-he); H2=z_receptor+(2*i*Hm_boundary_layer-he)
+        H3 = z_receptor-(2*i*Hm_boundary_layer+he); H4=z_receptor+(2*i*Hm_boundary_layer+he)
+        summation_term += (np.exp(-0.5*(H1/sigma_ze)**2) + np.exp(-0.5*(H2/sigma_ze)**2) + np.exp(-0.5*(H3/sigma_ze)**2) + np.exp(-0.5*(H4/sigma_ze)**2))
     V += summation_term
     trace_log += f"--- ۶. محاسبه جمله قائم (V) ---\n"
     trace_log += f"با در نظر گرفتن انعکاس از زمین و لایه مرزی، V = {V:.4f}\n\n"
@@ -235,21 +242,18 @@ def calculate_concentration(
     if denominator == 0: return np.inf, trace_log
     C = (Q_emission * K * V * D / denominator) * lateral_term
     trace_log += f"C = (Q*K*V*D) / (2*π*Us*σye*σze) * exp[-0.5*(y/σye)²]\n"
-    trace_log += f"C = ({Q_emission} * {K:.0f} * {V:.2f} * {D:.2f}) / (2*π*{us:.2f}*{sigma_ye:.2f}*{sigma_ze:.2f}) * exp[-0.5*({y_receptor}/{sigma_ye:.2f})²]\n"
+    trace_log += f"C = ({Q_emission}*{K:.0f}*{V:.2f}*{D:.2f})/(2*π*{us:.2f}*{sigma_ye:.2f}*{sigma_ze:.2f})*exp[-0.5*({y_receptor}/{sigma_ye:.2f})²]\n"
     return C, trace_log
 
 def generate_plot_for_telegram(params, single_point_coords):
-    grid_resolution = 80; x_max_m = 10000; y_max_m = 2000
-    x_points = np.linspace(1, x_max_m, grid_resolution)
-    y_points = np.linspace(-y_max_m, y_max_m, grid_resolution)
+    grid_resolution=80; x_max_m=10000; y_max_m=2000
+    x_points=np.linspace(1,x_max_m,grid_resolution); y_points=np.linspace(-y_max_m,y_max_m,grid_resolution)
     X, Y = np.meshgrid(x_points, y_points)
     Z = np.zeros_like(X)
     plot_height_z = single_point_coords['z']
     for i in range(X.shape[0]):
         for j in range(X.shape[1]):
-            conc, _ = calculate_concentration(
-                x_receptor=X[i, j], y_receptor=Y[i, j], z_receptor=plot_height_z, **params
-            )
+            conc, _ = calculate_concentration(x_receptor=X[i,j], y_receptor=Y[i,j], z_receptor=plot_height_z, **params)
             Z[i, j] = conc
     fig, ax = plt.subplots(figsize=(10, 7))
     contour = ax.pcolormesh(X, Y, Z, cmap='jet', shading='auto', vmin=0)
@@ -266,11 +270,28 @@ def generate_plot_for_telegram(params, single_point_coords):
     plt.close(fig)
     return buf
 
-# (بخش مربوط به ربات تلگرام بدون هیچ تغییری در اینجا قرار می‌گیرد)
-# ... (The Telegram bot part goes here without any changes)
+# (بخش ربات تلگرام با تمام قابلیت‌ها و آمارگیر Supabase)
+# ...
 (GET_X, GET_Y, GET_Z, GET_Q, GET_U_REF, GET_Z_REF, GET_STABILITY, GET_AREA, GET_HM, 
  GET_DS, GET_HS, GET_TS, GET_TA, GET_VS_CHOICE, GET_VS, GET_QS, GET_HALF_LIFE) = range(17)
+MAIN_MENU_KEYBOARD = [["محاسبات ⚙️"], ["آموزش و بررسی کد ربات 📚"], ["لینک پروژه در گیت هاب 🔗"]]
+MAIN_MENU_MARKUP = ReplyKeyboardMarkup(MAIN_MENU_KEYBOARD, resize_keyboard=True)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = update.message.from_user
+    # --- آمارگیر: بخش ثبت کاربر جدید ---
+    if db_engine:
+        try:
+            with db_engine.connect() as connection:
+                # Check if user_id already exists in a separate table for users
+                user_exists_query = text("SELECT 1 FROM users WHERE user_id = :user_id")
+                result = connection.execute(user_exists_query, {"user_id": user.id}).first()
+                if not result:
+                    add_user_query = text("INSERT INTO users (user_id) VALUES (:user_id)")
+                    connection.execute(add_user_query, {"user_id": user.id})
+                    connection.commit()
+        except Exception as e:
+            logger.error(f"Error updating user stats: {e}")
+    # ------------------------------------
     welcome_message = (
         "به نام خدا\n"
         "من یک ربات مدل سازی آلودگی هوا و کاملا ایرانی هستم🇮🇷\n"
@@ -280,16 +301,59 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "فصل پنج جزوه دکتر اشرفی تهیه و آماده شده است.\n"
         "امیدوارم با استفاده از ایده طراحی من با زیبایی های درس مدل سازی آلودگی هوا "
         "بیشتر آشنا شده و از آن بهره مند شوید.😊☁️\n\n"
-        "برای شروع یک محاسبه جدید، دستور /calculate را ارسال کنید."
+        "لطفاً یکی از گزینه‌های زیر را انتخاب کنید:"
     )
-    await update.message.reply_text(welcome_message)
+    await update.message.reply_text(welcome_message, reply_markup=MAIN_MENU_MARKUP)
+async def show_github_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text(
+        "این ربات یک پروژه متن‌باز است. برای مشاهده و بررسی کدها می‌توانید به لینک زیر در گیت‌هاب مراجعه کنید:\n"
+        "https://github.com/fatemimehr/air-quality-bot",
+        reply_markup=MAIN_MENU_MARKUP
+    )
+async def show_code_tutorial(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text("📚 **آموزش کد ربات (بخش اول: مقدمات و کتابخانه‌ها)**\n\nدر ابتدای کد، کتابخانه‌های لازم را وارد می‌کنیم. کتابخانه مثل یک جعبه ابزار آماده است که به ما در انجام کارهای مختلف کمک می‌کند.", reply_markup=MAIN_MENU_MARKUP)
+    code_part1 = "import logging\nimport io\nimport os\nimport numpy as np\nimport matplotlib.pyplot as plt\nfrom telegram import Update, ...\nfrom flask import Flask\nfrom threading import Thread\nimport sqlalchemy"
+    await update.message.reply_text(f"<code>{code_part1}</code>", parse_mode='HTML')
+    await update.message.reply_text("📚 **آموزش کد ربات (بخش دوم: بیدار نگه داشتن ربات)**\n\nسرویس رایگان Render بعد از مدتی عدم فعالیت، ربات را متوقف می‌کند. برای جلوگیری از این اتفاق، یک وب‌سرور کوچک با Flask می‌سازیم که با دریافت درخواست‌های منظم از سرویس خارجی (مثل UptimeRobot)، ربات را همیشه فعال نگه می‌دارد.")
+    code_part2 = "app = Flask('')\n\n@app.route('/')\ndef home():\n    return \"I'm alive!\"\n\ndef run_flask():\n  app.run(host='0.0.0.0', port=8080)\n\ndef keep_alive():\n    t = Thread(target=run_flask)\n    t.start()"
+    await update.message.reply_text(f"<code>{code_part2}</code>", parse_mode='HTML')
+    await update.message.reply_text("📚 **آموزش کد ربات (بخش سوم: موتور محاسباتی)**\n\nاین بخش قلب علمی ربات است. تابع `calculate_concentration` تمام ۱۵ پارامتر ورودی را گرفته و طبق فرمول‌ها و جداول مدل گوسی، غلظت را محاسبه می‌کند. این تابع علاوه بر نتیجه نهایی، یک گزارش متنی از مراحل محاسبه را نیز برمی‌گرداند.")
+    code_part3 = "def calculate_concentration(...):\n    trace_log = \"\" # متغیری برای ذخیره گزارش مراحل\n    # ... (تمام مراحل علمی مدل) ...\n    # محاسبه سرعت باد در ارتفاع دودکش\n    us = u_ref * (hs_stack_height / z_ref) ** p\n    trace_log += f\"--- ۱. محاسبه سرعت باد (Us) ---\\n\"\n    # ... (مراحل دیگر تا محاسبه غلظت نهایی) ...\n    return C, trace_log"
+    await update.message.reply_text(f"<code>{code_part3}</code>", parse_mode='HTML')
+    await update.message.reply_text("📚 **آموزش کد ربات (بخش چهارم: منطق مکالمه ربات)**\n\nاین بخش با استفاده از `ConversationHandler` یک مکالمه ۱۷ مرحله‌ای با کاربر ایجاد می‌کند. ربات در هر مرحله یک سوال می‌پرسد، پاسخ کاربر را ذخیره کرده و به مرحله بعد می‌رود. در انتها، تمام داده‌های جمع‌آوری شده را برای محاسبه و رسم نمودار ارسال می‌کند.")
+    code_part4 = "(GET_X, GET_Y, ...) = range(17) # تعریف ۱۷ مرحله مکالمه\n\n# ... (توابع get_x, get_y, ...)\n\n# تعریف کنترل‌کننده مکالمه\nconv_handler = ConversationHandler(\n    entry_points=[MessageHandler(filters.Regex('^محاسبات ⚙️$'), calculate_start)],\n    states={...},\n    fallbacks=[CommandHandler(\"cancel\", cancel)],\n)"
+    await update.message.reply_text(f"<code>{code_part4}</code>", parse_mode='HTML')
+    await update.message.reply_text("آموزش به پایان رسید. برای شروع، یکی از گزینه‌ها را انتخاب کنید.")
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.message.from_user.id == ADMIN_ID:
+        if not db_engine:
+            await update.message.reply_text("خطا: اتصال به پایگاه داده آمار برقرار نیست.")
+            return
+        try:
+            with db_engine.connect() as connection:
+                # Get total users
+                user_count_query = text("SELECT count(*) FROM users")
+                total_users = connection.execute(user_count_query).scalar_one()
+                
+                # Get calculation count
+                calc_count_query = text("SELECT value FROM stats WHERE key = 'calculation_count'")
+                calc_count_result = connection.execute(calc_count_query).first()
+                calc_count = int(calc_count_result[0]) if calc_count_result else 0
+
+                stats_message = (
+                    f"📊 **آمار استفاده از ربات**\n\n"
+                    f"تعداد کاربران یکتا: **{total_users}** نفر\n"
+                    f"تعداد کل محاسبات انجام شده: **{calc_count}** بار"
+                )
+                await update.message.reply_text(stats_message, parse_mode='Markdown')
+        except Exception as e:
+            await update.message.reply_text(f"خطا در خواندن آمار از پایگاه داده: {e}")
+    else:
+        await update.message.reply_text("شما اجازه دسترسی به این دستور را ندارید.")
+
 async def calculate_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data.clear()
-    await update.message.reply_text(
-        "شروع فرآیند محاسبه. لطفاً ۱۵ پارامتر زیر را به ترتیب وارد کنید.\n"
-        "برای لغو عملیات در هر مرحله، دستور /cancel را ارسال کنید.\n\n"
-        "۱. لطفاً فاصله در راستای باد (x) را به متر وارد کنید:"
-    )
+    await update.message.reply_text("شروع فرآیند محاسبه. لطفاً ۱۵ پارامتر زیر را به ترتیب وارد کنید.\n" "برای لغو عملیات در هر مرحله، دستور /cancel را ارسال کنید.\n\n" "۱. لطفاً فاصله در راستای باد (x) را به متر وارد کنید:", reply_markup=ReplyKeyboardRemove())
     return GET_X
 async def get_x(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
@@ -440,54 +504,61 @@ async def get_half_life_and_run(update: Update, context: ContextTypes.DEFAULT_TY
         await update.message.reply_text("ورودی نامعتبر است. لطفاً یک عدد برای نیمه عمر وارد کنید.")
         return GET_HALF_LIFE
     await update.message.reply_text("تمام ورودی‌ها دریافت شد. لطفاً برای انجام محاسبات صبر کنید...", reply_markup=ReplyKeyboardRemove())
-    single_point_coords = {
-        'x': context.user_data.pop('x'), 
-        'y': context.user_data.pop('y'), 
-        'z': context.user_data.pop('z')
-    }
+    single_point_coords = {'x': context.user_data.pop('x'), 'y': context.user_data.pop('y'), 'z': context.user_data.pop('z')}
     scenario_params = context.user_data
+    scenario_params.pop('current_state', None)
+    
+    # --- آمارگیر: بخش ثبت محاسبه جدید ---
+    if db_engine:
+        try:
+            with db_engine.connect() as connection:
+                # Use UPSERT logic to either insert the calculation_count or increment it
+                upsert_query = text("""
+                    INSERT INTO stats (key, value)
+                    VALUES ('calculation_count', '1')
+                    ON CONFLICT (key) DO UPDATE
+                    SET value = (SELECT (value::integer + 1)::text FROM stats WHERE key = 'calculation_count');
+                """)
+                connection.execute(upsert_query)
+                connection.commit()
+        except Exception as e:
+            logger.error(f"Error updating calculation stats: {e}")
+    # -----------------------------------
+
     concentration, trace_report = calculate_concentration(
-        x_receptor=single_point_coords['x'], 
-        y_receptor=single_point_coords['y'], 
-        z_receptor=single_point_coords['z'],
+        x_receptor=single_point_coords['x'], y_receptor=single_point_coords['y'], z_receptor=single_point_coords['z'],
         **scenario_params
     )
-    result_message = (
-        f"--- نتیجه محاسبه ---\n"
-        f"غلظت در نقطه (x={single_point_coords['x']}, y={single_point_coords['y']}, z={single_point_coords['z']}) متر:\n"
-        f"🎯 {concentration:.4f} µg/m³"
-    )
-    await update.message.reply_text(result_message)
-    if len(trace_report) > 4096:
-        parts = [trace_report[i:i+4096] for i in range(0, len(trace_report), 4096)]
-        for part in parts:
-            await update.message.reply_text(part)
-    else:
-        await update.message.reply_text(trace_report)
-    await update.message.reply_text("در حال تولید نمودار توزیع غلظت...")
+    await update.message.reply_text(f"📝 **گزارش گام به گام محاسبات:**\n\n`{trace_report}`", parse_mode='Markdown')
+    await update.message.reply_text(
+        f"✅ **نتیجه نهایی**\n\n"
+        f"غلظت محاسبه شده در نقطه (x={single_point_coords['x']}, y={single_point_coords['y']}, z={single_point_coords['z']}) برابر است با:\n"
+        f"**{concentration:.4f} میکروگرم بر متر مکعب**"
+    , parse_mode='Markdown')
+    await update.message.reply_text("در حال آماده‌سازی نمودار... این مرحله ممکن است کمی طول بکشد.")
     plot_buffer = generate_plot_for_telegram(scenario_params, single_point_coords)
-    await context.bot.send_photo(chat_id=update.effective_chat.id, photo=plot_buffer, caption="نمودار توزیع غلظت")
-    await update.message.reply_text("محاسبه کامل شد! برای شروع محاسبه جدید، دستور /calculate را ارسال کنید.")
+    await context.bot.send_photo(chat_id=update.effective_chat.id, photo=plot_buffer, caption="Pollutant concentration diagram.")
+    await update.message.reply_text("محاسبه کامل شد! برای بازگشت به منوی اصلی، دستور /start را ارسال کنید.", reply_markup=MAIN_MENU_MARKUP)
     context.user_data.clear()
     return ConversationHandler.END
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data.clear()
-    await update.message.reply_text("محاسبه لغو شد.", reply_markup=ReplyKeyboardRemove())
+    await update.message.reply_text("عملیات لغو شد. شما به منوی اصلی بازگشتید.", reply_markup=MAIN_MENU_MARKUP)
     return ConversationHandler.END
 
 def main() -> None:
+    keep_alive()
     TOKEN = os.environ.get("TELEGRAM_TOKEN")
     if not TOKEN:
-        print("Error: TELEGRAM_TOKEN not found. Please add it to your environment variables or Replit Secrets.")
+        print("Error: TELEGRAM_TOKEN not found in Replit/Render Secrets.")
         return
-    
-    # Start the Flask server to keep the bot alive
-    keep_alive()
 
     application = Application.builder().token(TOKEN).build()
-
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("calculate", calculate_start)],
+        entry_points=[
+            CommandHandler("calculate", calculate_start),
+            MessageHandler(filters.Regex('^محاسبات ⚙️$'), calculate_start)
+        ],
         states={
             GET_X: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_x)],
             GET_Y: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_y)],
@@ -509,12 +580,12 @@ def main() -> None:
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
-
     application.add_handler(CommandHandler("start", start))
     application.add_handler(conv_handler)
-
+    application.add_handler(MessageHandler(filters.Regex('^آموزش و بررسی کد ربات 📚$'), show_code_tutorial))
+    application.add_handler(MessageHandler(filters.Regex('^لینک پروژه در گیت هاب 🔗$'), show_github_link))
+    application.add_handler(CommandHandler("stats", stats))
     print("Bot is running...")
     application.run_polling()
-
 if __name__ == "__main__":
     main()
