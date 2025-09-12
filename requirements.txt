@@ -3,3 +3,5 @@ numpy
 matplotlib
 telegram
 flask
+psycopg2-binary
+sqlalchemy
