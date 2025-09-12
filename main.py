@@ -20,7 +20,7 @@ import sqlalchemy
 from sqlalchemy import create_engine, text
 
 # --- شناسه عددی ادمین ---
-ADMIN_ID = 123456789  # <--- !!! مهم: این عدد را با شناسه خودتان جایگزین کنید
+ADMIN_ID = 166949661  # <--- !!! مهم: این عدد را با شناسه خودتان جایگزین کنید
 
 # --- اتصال به پایگاه داده Supabase (PostgreSQL) ---
 db_engine = None
