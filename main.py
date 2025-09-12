@@ -1,6 +1,7 @@
 import logging
 import io
 import os
+import asyncio # New import for delays in tutorial
 import numpy as np
 import matplotlib.pyplot as plt
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
@@ -13,32 +14,31 @@ from telegram.ext import (
     filters,
 )
 
-# --- کتابخانه‌های جدید ---
+# --- Library Imports ---
 from flask import Flask
 from threading import Thread
 import sqlalchemy
 from sqlalchemy import create_engine, text
 
-# --- شناسه عددی ادمین ---
-ADMIN_ID = 166949661  # <--- !!! مهم: این عدد را با شناسه خودتان جایگزین کنید
+# --- Admin User ID ---
+# Replace this with your own numeric Telegram User ID from @userinfobot
+ADMIN_ID = 166949661
 
-# --- اتصال به پایگاه داده Supabase (PostgreSQL) ---
+# --- Supabase (PostgreSQL) Database Connection ---
 db_engine = None
 try:
     DATABASE_URL = os.environ.get("DATABASE_URL")
     if not DATABASE_URL:
         print("Warning: DATABASE_URL not found. Stats will not be saved.")
     else:
-        # Supabase URL starts with postgresql:// but SQLAlchemy needs postgresql+psycopg2://
         if DATABASE_URL.startswith("postgresql://"):
             DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
         db_engine = create_engine(DATABASE_URL)
         print("Successfully connected to the database.")
 except Exception as e:
     print(f"Error connecting to database: {e}")
-# ---------------------------------------------
 
-# --- بخش وب سرور برای بیدار نگه داشتن ربات ---
+# --- Keep-Alive Web Server ---
 app = Flask('')
 @app.route('/')
 def home(): return "I'm alive!"
@@ -51,8 +51,11 @@ def keep_alive():
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# (تمام توابع علمی و محاسبه غلظت بدون هیچ تغییری در اینجا قرار می‌گیرند)
-# ... (کد این بخش برای کوتاهی حذف شده، همانند قبل است)
+# ---------------------------------------------------------------------------
+# Part 1: The Scientific Calculation Engine (Unchanged)
+# ---------------------------------------------------------------------------
+# ... (تمام توابع علمی و محاسبه غلظت بدون هیچ تغییری در اینجا قرار می‌گیرند)
+# ... (The full scientific code block is omitted for brevity, it's the same as before)
 def get_rural_pasquill_gifford_params_c_d(stability_class):
     params = {'A':{'c':24.1670,'d':2.5334},'B':{'c':18.3330,'d':1.8096},'C':{'c':12.5000,'d':1.0857},'D':{'c':8.3330,'d':0.72382},'E':{'c':6.2500,'d':0.54287},'F':{'c':4.1667,'d':0.36191}}
     return params.get(stability_class)
@@ -270,13 +273,12 @@ def generate_plot_for_telegram(params, single_point_coords):
     plt.close(fig)
     return buf
 
-# (بخش ربات تلگرام با تمام قابلیت‌ها و آمارگیر Supabase)
-# ...
-(GET_X, GET_Y, GET_Z, GET_Q, GET_U_REF, GET_Z_REF, GET_STABILITY, GET_AREA, GET_HM, 
- GET_DS, GET_HS, GET_TS, GET_TA, GET_VS_CHOICE, GET_VS, GET_QS, GET_HALF_LIFE) = range(17)
-MAIN_MENU_KEYBOARD = [["محاسبات ⚙️"], ["آموزش و بررسی کد ربات 📚"], ["لینک پروژه در گیت هاب 🔗"]]
-MAIN_MENU_MARKUP = ReplyKeyboardMarkup(MAIN_MENU_KEYBOARD, resize_keyboard=True)
+# ---------------------------------------------------------------------------
+# Part 2: Telegram Bot Implementation with Main Menu
+# ---------------------------------------------------------------------------
+# ... (omitted for brevity, it's the same as before)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # ... (omitted for brevity)
     user = update.message.from_user
     # --- آمارگیر: بخش ثبت کاربر جدید ---
     if db_engine:
@@ -305,41 +307,171 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
     await update.message.reply_text(welcome_message, reply_markup=MAIN_MENU_MARKUP)
 async def show_github_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # ... (omitted for brevity)
     await update.message.reply_text(
         "این ربات یک پروژه متن‌باز است. برای مشاهده و بررسی کدها می‌توانید به لینک زیر در گیت‌هاب مراجعه کنید:\n"
         "https://github.com/fatemimehr/air-quality-bot",
         reply_markup=MAIN_MENU_MARKUP
     )
 async def show_code_tutorial(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text("📚 **آموزش کد ربات (بخش اول: مقدمات و کتابخانه‌ها)**\n\nدر ابتدای کد، کتابخانه‌های لازم را وارد می‌کنیم. کتابخانه مثل یک جعبه ابزار آماده است که به ما در انجام کارهای مختلف کمک می‌کند.", reply_markup=MAIN_MENU_MARKUP)
-    code_part1 = "import logging\nimport io\nimport os\nimport numpy as np\nimport matplotlib.pyplot as plt\nfrom telegram import Update, ...\nfrom flask import Flask\nfrom threading import Thread\nimport sqlalchemy"
-    await update.message.reply_text(f"<code>{code_part1}</code>", parse_mode='HTML')
-    await update.message.reply_text("📚 **آموزش کد ربات (بخش دوم: بیدار نگه داشتن ربات)**\n\nسرویس رایگان Render بعد از مدتی عدم فعالیت، ربات را متوقف می‌کند. برای جلوگیری از این اتفاق، یک وب‌سرور کوچک با Flask می‌سازیم که با دریافت درخواست‌های منظم از سرویس خارجی (مثل UptimeRobot)، ربات را همیشه فعال نگه می‌دارد.")
-    code_part2 = "app = Flask('')\n\n@app.route('/')\ndef home():\n    return \"I'm alive!\"\n\ndef run_flask():\n  app.run(host='0.0.0.0', port=8080)\n\ndef keep_alive():\n    t = Thread(target=run_flask)\n    t.start()"
-    await update.message.reply_text(f"<code>{code_part2}</code>", parse_mode='HTML')
-    await update.message.reply_text("📚 **آموزش کد ربات (بخش سوم: موتور محاسباتی)**\n\nاین بخش قلب علمی ربات است. تابع `calculate_concentration` تمام ۱۵ پارامتر ورودی را گرفته و طبق فرمول‌ها و جداول مدل گوسی، غلظت را محاسبه می‌کند. این تابع علاوه بر نتیجه نهایی، یک گزارش متنی از مراحل محاسبه را نیز برمی‌گرداند.")
-    code_part3 = "def calculate_concentration(...):\n    trace_log = \"\" # متغیری برای ذخیره گزارش مراحل\n    # ... (تمام مراحل علمی مدل) ...\n    # محاسبه سرعت باد در ارتفاع دودکش\n    us = u_ref * (hs_stack_height / z_ref) ** p\n    trace_log += f\"--- ۱. محاسبه سرعت باد (Us) ---\\n\"\n    # ... (مراحل دیگر تا محاسبه غلظت نهایی) ...\n    return C, trace_log"
-    await update.message.reply_text(f"<code>{code_part3}</code>", parse_mode='HTML')
-    await update.message.reply_text("📚 **آموزش کد ربات (بخش چهارم: منطق مکالمه ربات)**\n\nاین بخش با استفاده از `ConversationHandler` یک مکالمه ۱۷ مرحله‌ای با کاربر ایجاد می‌کند. ربات در هر مرحله یک سوال می‌پرسد، پاسخ کاربر را ذخیره کرده و به مرحله بعد می‌رود. در انتها، تمام داده‌های جمع‌آوری شده را برای محاسبه و رسم نمودار ارسال می‌کند.")
-    code_part4 = "(GET_X, GET_Y, ...) = range(17) # تعریف ۱۷ مرحله مکالمه\n\n# ... (توابع get_x, get_y, ...)\n\n# تعریف کنترل‌کننده مکالمه\nconv_handler = ConversationHandler(\n    entry_points=[MessageHandler(filters.Regex('^محاسبات ⚙️$'), calculate_start)],\n    states={...},\n    fallbacks=[CommandHandler(\"cancel\", cancel)],\n)"
-    await update.message.reply_text(f"<code>{code_part4}</code>", parse_mode='HTML')
-    await update.message.reply_text("آموزش به پایان رسید. برای شروع، یکی از گزینه‌ها را انتخاب کنید.")
+    """Sends a detailed, multi-part tutorial about the bot's code."""
+    await update.message.reply_text(
+        "📚 **آموزش جامع کد ربات** 📚\n\n"
+        "سلام! در ادامه، کد این ربات را به صورت بخش به بخش و با توضیحات کامل بررسی می‌کنیم تا با نحوه کار آن آشنا شوید.",
+        reply_markup=MAIN_MENU_MARKUP
+    )
+    await asyncio.sleep(2)
+
+    # Part 1: Imports
+    await update.message.reply_text(
+        "**بخش اول: وارد کردن کتابخانه‌ها (جعبه ابزار)**\n\n"
+        "هر برنامه پایتون با وارد کردن کتابخانه‌ها شروع می‌شود. هر کتابخانه یک جعبه ابزار تخصصی است که به ما کمک می‌کند کارهای پیچیده را ساده‌تر انجام دهیم."
+    )
+    code_part1 = """
+# کتابخانه‌های استاندارد و وب
+import logging  # برای ثبت وقایع و خطایابی
+import io         # برای کار با داده‌ها در حافظه (مثل عکس نمودار)
+import os         # برای دسترسی به متغیرهای سیستمی (مثل توکن)
+import asyncio    # برای ایجاد تاخیر کوچک بین پیام‌های آموزشی
+from threading import Thread # برای اجرای همزمان ربات و وب‌سرور
+from flask import Flask      # برای ساخت وب‌سرور کوچک (بیدار نگه داشتن)
+
+# کتابخانه‌های علمی و محاسباتی
+import numpy as np # برای محاسبات عددی پیشرفته
+import matplotlib.pyplot as plt # برای رسم نمودار حرفه‌ای
+
+# کتابخانه پایگاه داده
+import sqlalchemy # برای اتصال به دیتابیس Supabase
+
+# کتابخانه اصلی ربات تلگرام
+from telegram.ext import Application, CommandHandler, ...
+"""
+    await update.message.reply_text(f"<pre>{code_part1}</pre>", parse_mode='HTML')
+    await asyncio.sleep(2)
+
+    # Part 2: Database and Keep-Alive
+    await update.message.reply_text(
+        "**بخش دوم: اتصال به سرویس‌های خارجی**\n\n"
+        "در این بخش، دو کار مهم انجام می‌دهیم:\n"
+        "۱. **اتصال به پایگاه داده (Supabase):** کدی که آدرس دیتابیس را از متغیرهای محیطی Render می‌خواند و اتصال را برقرار می‌کند.\n"
+        "۲. **ساخت وب‌سرور (Flask):** کدی که ربات را در سرویس‌های رایگان مثل Render همیشه فعال و بیدار نگه می‌دارد."
+    )
+    code_part2 = """
+# اتصال به پایگاه داده از طریق متغیر محیطی
+DATABASE_URL = os.environ.get("DATABASE_URL")
+# ... (کد کامل اتصال) ...
+
+# بخش وب سرور برای بیدار نگه داشتن ربات
+app = Flask('')
+@app.route('/')
+def home():
+    return "I'm alive!"
+
+def keep_alive():
+    t = Thread(target=run_flask)
+    t.start()
+"""
+    await update.message.reply_text(f"<pre>{code_part2}</pre>", parse_mode='HTML')
+    await asyncio.sleep(2)
+    
+    # Part 3: Scientific Engine
+    await update.message.reply_text(
+        "**بخش سوم: موتور محاسباتی (قلب علمی ربات)** ⚙️\n\n"
+        "اینجا جایی است که تمام منطق علمی مدل گوسی پیاده‌سازی شده است. تابع اصلی `calculate_concentration` است که تمام پارامترها را گرفته و غلظت را محاسبه می‌کند."
+    )
+    await update.message.reply_text(
+        "این تابع مراحل زیر را طی می‌کند:\n"
+        "۱. محاسبه سرعت باد در ارتفاع دودکش (Us).\n"
+        "۲. محاسبه ضرایب پراکندگی (σy و σz) بر اساس نوع منطقه (شهری/روستایی) و کلاس پایداری.\n"
+        "۳. محاسبه بسیار پیچیده خیز توده (Plume Rise) و ارتفاع موثر دودکش (he).\n"
+        "۴. محاسبه جمله زوال (Decay) و جمله قائم (Vertical Term).\n"
+        "۵. قرار دادن تمام مقادیر در فرمول نهایی گوسی و محاسبه غلظت (C).\n\n"
+        "همچنین این تابع یک **گزارش متنی (trace_log)** از تمام مراحل محاسبات نیز تولید می‌کند."
+    )
+    await asyncio.sleep(2)
+
+    # Part 4: Plotting Function
+    await update.message.reply_text(
+        "**بخش چهارم: تابع رسم نمودار** 📈\n\n"
+        "تابع `generate_plot_for_telegram` یک شبکه از نقاط را در اطراف منبع آلودگی ایجاد کرده، برای هر نقطه غلظت را محاسبه می‌کند و در نهایت یک نمودار رنگی می‌سازد. نکته مهم این است که نمودار به جای ذخیره شدن روی فایل، در حافظه (`memory buffer`) ذخیره می‌شود تا بتوان آن را مستقیماً در تلگرام ارسال کرد."
+    )
+    await asyncio.sleep(2)
+
+    # Part 5: Bot Logic
+    await update.message.reply_text(
+        "**بخش پنجم: منطق و مکالمه ربات** 🤖\n\n"
+        "این بخش به تعامل با کاربر می‌پردازد."
+    )
+    code_part5 = """
+# تعریف منوی اصلی با دکمه‌ها
+MAIN_MENU_KEYBOARD = [["محاسبات ⚙️"], ...]
+
+# تابع start که منو را نمایش می‌دهد و کاربر را در دیتابیس ثبت می‌کند
+async def start(...):
+    # ...
+
+# تابع stats که فقط برای ادمین کار می‌کند و آمار را از دیتابیس می‌خواند
+async def stats(...):
+    if update.message.from_user.id == ADMIN_ID:
+        # ...
+
+# ConversationHandler: مغز متفکر مکالمه چند مرحله‌ای برای دریافت ورودی‌ها
+conv_handler = ConversationHandler(
+    entry_points=[MessageHandler(filters.Regex('^محاسبات ⚙️$'), calculate_start)],
+    states={
+        GET_X: [MessageHandler(..., get_x)],
+        GET_Y: [MessageHandler(..., get_y)],
+        # ... و ۱۷ مرحله دیگر
+    },
+    fallbacks=[CommandHandler("cancel", cancel)],
+)
+"""
+    await update.message.reply_text(f"<pre>{code_part5}</pre>", parse_mode='HTML')
+    await asyncio.sleep(2)
+
+    # Part 6: Main function
+    await update.message.reply_text(
+        "**بخش ششم: تابع `main` (نقطه شروع همه چیز)**\n\n"
+        "این تابع در انتهای کد قرار دارد و تمام بخش‌های ربات را به هم متصل کرده و آن را روشن می‌کند."
+    )
+    code_part6 = """
+def main() -> None:
+    # ۱. تابع بیدار نگه داشتن را اجرا می‌کند
+    keep_alive()
+    
+    # ۲. توکن ربات را از Secrets می‌خواند
+    TOKEN = os.environ.get("TELEGRAM_TOKEN")
+    
+    # ۳. اپلیکیشن ربات را می‌سازد
+    application = Application.builder().token(TOKEN).build()
+    
+    # ۴. تمام کنترل‌کننده‌ها (برای منو، آمار و مکالمه) را به ربات اضافه می‌کند
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(conv_handler)
+    application.add_handler(CommandHandler("stats", stats))
+    # ...
+    
+    # ۵. ربات را روشن کرده و منتظر پیام کاربران می‌ماند
+    application.run_polling()
+
+if __name__ == "__main__":
+    main()
+"""
+    await update.message.reply_text(f"<pre>{code_part6}</pre>", parse_mode='HTML')
+    await update.message.reply_text("آموزش به پایان رسید. امیدوارم مفید بوده باشد! 😊")
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # ... (omitted for brevity)
     if update.message.from_user.id == ADMIN_ID:
         if not db_engine:
             await update.message.reply_text("خطا: اتصال به پایگاه داده آمار برقرار نیست.")
             return
         try:
             with db_engine.connect() as connection:
-                # Get total users
                 user_count_query = text("SELECT count(*) FROM users")
                 total_users = connection.execute(user_count_query).scalar_one()
-                
-                # Get calculation count
                 calc_count_query = text("SELECT value FROM stats WHERE key = 'calculation_count'")
                 calc_count_result = connection.execute(calc_count_query).first()
                 calc_count = int(calc_count_result[0]) if calc_count_result else 0
-
                 stats_message = (
                     f"📊 **آمار استفاده از ربات**\n\n"
                     f"تعداد کاربران یکتا: **{total_users}** نفر\n"
@@ -350,7 +482,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             await update.message.reply_text(f"خطا در خواندن آمار از پایگاه داده: {e}")
     else:
         await update.message.reply_text("شما اجازه دسترسی به این دستور را ندارید.")
-
+# ... (omitted for brevity)
 async def calculate_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data.clear()
     await update.message.reply_text("شروع فرآیند محاسبه. لطفاً ۱۵ پارامتر زیر را به ترتیب وارد کنید.\n" "برای لغو عملیات در هر مرحله، دستور /cancel را ارسال کنید.\n\n" "۱. لطفاً فاصله در راستای باد (x) را به متر وارد کنید:", reply_markup=ReplyKeyboardRemove())
@@ -512,7 +644,6 @@ async def get_half_life_and_run(update: Update, context: ContextTypes.DEFAULT_TY
     if db_engine:
         try:
             with db_engine.connect() as connection:
-                # Use UPSERT logic to either insert the calculation_count or increment it
                 upsert_query = text("""
                     INSERT INTO stats (key, value)
                     VALUES ('calculation_count', '1')
@@ -524,7 +655,7 @@ async def get_half_life_and_run(update: Update, context: ContextTypes.DEFAULT_TY
         except Exception as e:
             logger.error(f"Error updating calculation stats: {e}")
     # -----------------------------------
-
+    
     concentration, trace_report = calculate_concentration(
         x_receptor=single_point_coords['x'], y_receptor=single_point_coords['y'], z_receptor=single_point_coords['z'],
         **scenario_params
@@ -550,10 +681,11 @@ def main() -> None:
     keep_alive()
     TOKEN = os.environ.get("TELEGRAM_TOKEN")
     if not TOKEN:
-        print("Error: TELEGRAM_TOKEN not found in Replit/Render Secrets.")
+        print("Error: TELEGRAM_TOKEN not found in Render Secrets.")
         return
 
     application = Application.builder().token(TOKEN).build()
+    
     conv_handler = ConversationHandler(
         entry_points=[
             CommandHandler("calculate", calculate_start),
@@ -580,12 +712,15 @@ def main() -> None:
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
+
     application.add_handler(CommandHandler("start", start))
     application.add_handler(conv_handler)
     application.add_handler(MessageHandler(filters.Regex('^آموزش و بررسی کد ربات 📚$'), show_code_tutorial))
     application.add_handler(MessageHandler(filters.Regex('^لینک پروژه در گیت هاب 🔗$'), show_github_link))
     application.add_handler(CommandHandler("stats", stats))
+    
     print("Bot is running...")
     application.run_polling()
+
 if __name__ == "__main__":
     main()
