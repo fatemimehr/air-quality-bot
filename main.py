@@ -4,8 +4,6 @@ import os
 import asyncio
 import numpy as np
 import matplotlib.pyplot as plt
-import html # برای امن‌سازی کاراکترهای خاص در کد آموزشی
-
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (
     Application,
@@ -23,7 +21,7 @@ import sqlalchemy
 from sqlalchemy import create_engine, text
 
 # --- Admin User ID ---
-# لطفا شناسه کاربری عددی تلگرام خود را از ربات @userinfobot گرفته و جایگزین کنید
+# Replace this with your own numeric Telegram User ID from @userinfobot
 ADMIN_ID = 166949661
 
 # --- Supabase (PostgreSQL) Database Connection ---
@@ -68,9 +66,8 @@ def keep_alive():
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
 # ---------------------------------------------------------------------------
-# Part 1: The Scientific Calculation Engine
+# Part 1: The Scientific Calculation Engine (Unchanged)
 # ---------------------------------------------------------------------------
 def get_rural_pasquill_gifford_params_c_d(stability_class):
     params = {'A':{'c':24.1670,'d':2.5334},'B':{'c':18.3330,'d':1.8096},'C':{'c':12.5000,'d':1.0857},'D':{'c':8.3330,'d':0.72382},'E':{'c':6.2500,'d':0.54287},'F':{'c':4.1667,'d':0.36191}}
@@ -137,7 +134,8 @@ def calculate_concentration(
     if us == 0: us = 1e-6
     trace_log += "--- ۱. محاسبه سرعت باد در ارتفاع دودکش (Us) ---\n"
     trace_log += f"با توجه به کلاس پایداری '{stability_class}' و نوع منطقه '{area_type}'، ضریب توان p={p:.2f} است.\n"
-    trace_log += f"Us = U_ref * (hs / z_ref)^p = {u_ref} * ({hs_stack_height} / {z_ref})^{p:.2f} = {us:.2f} m/s\n\n"
+    trace_log += f"Us = U_ref * (hs / z_ref)^p\n"
+    trace_log += f"Us = {u_ref} * ({hs_stack_height} / {z_ref})^{p:.2f} = {us:.2f} m/s\n\n"
     x_km = x_receptor / 1000.0
     trace_log += f"--- ۲. محاسبه ضریب پراکندگی افقی (σy) برای x={x_receptor} متر ---\n"
     if area_type == 'rural':
@@ -291,176 +289,10 @@ def generate_plot_for_telegram(params, single_point_coords):
 # ---------------------------------------------------------------------------
 # Part 2: Telegram Bot Implementation
 # ---------------------------------------------------------------------------
-
-# محتوای کد ساده برای بخش آموزشی
-SIMPLE_CODE_CONTENT = """
-import numpy as np
-
-# ---------------------------------------------------------------------------
-# بخش ۱: توابع کمکی برای محاسبات مدل (بدون تغییر)
-# ---------------------------------------------------------------------------
-
-def get_rural_pasquill_gifford_params_c_d(stability_class):
-    \"\"\"
-    (گام سوم)
-    ضرایب c و d را برای محاسبه سیگما-وای در مناطق حومه‌ای برمی‌گرداند.
-    \"\"\"
-    params = {
-        'A': {'c': 24.1670, 'd': 2.5334},
-        'B': {'c': 18.3330, 'd': 1.8096},
-        'C': {'c': 12.5000, 'd': 1.0857},
-        'D': {'c': 8.3330,  'd': 0.72382},
-        'E': {'c': 6.2500,  'd': 0.54287},
-        'F': {'c': 4.1667,  'd': 0.36191}
-    }
-    return params.get(stability_class)
-
-def get_rural_sigma_z_params_a_b(stability_class, x_km):
-    \"\"\"
-    (گام پنجم)
-    ضرایب a و b را برای محاسبه سیگما-زد در مناطق حومه‌ای بر اساس فاصله برمی‌گرداند.
-    \"\"\"
-    if stability_class == 'A':
-        if x_km < 0.10: return {'a': 122.800, 'b': 0.94470}
-        if 0.10 <= x_km <= 0.15: return {'a': 158.080, 'b': 1.05420}
-        if 0.16 <= x_km <= 0.20: return {'a': 170.220, 'b': 1.09320}
-        if 0.21 <= x_km <= 0.25: return {'a': 179.520, 'b': 1.12620}
-        if 0.26 <= x_km <= 0.30: return {'a': 217.410, 'b': 1.26440}
-        if 0.31 <= x_km <= 0.40: return {'a': 258.890, 'b': 1.40940}
-        if 0.41 <= x_km <= 0.50: return {'a': 346.750, 'b': 1.72830}
-        if 0.51 <= x_km <= 3.11: return {'a': 453.850, 'b': 2.11660}
-        return None
-    elif stability_class == 'B':
-        if x_km < 0.20: return {'a': 90.673, 'b': 0.93198}
-        if 0.21 <= x_km <= 0.40: return {'a': 98.483, 'b': 0.98332}
-        return {'a': 109.300, 'b': 1.09710}
-    elif stability_class == 'C':
-        return {'a': 61.141, 'b': 0.91465}
-    elif stability_class == 'D':
-        if x_km < 0.30: return {'a': 34.459, 'b': 0.86974}
-        if 0.31 <= x_km <= 1.00: return {'a': 32.093, 'b': 0.81066}
-        if 1.01 <= x_km <= 3.00: return {'a': 32.093, 'b': 0.64403}
-        if 3.01 <= x_km <= 10.00: return {'a': 33.504, 'b': 0.60486}
-        if 10.01 <= x_km <= 30.00: return {'a': 36.650, 'b': 0.56589}
-        return {'a': 44.053, 'b': 0.51179}
-    elif stability_class == 'E':
-        if x_km < 0.10: return {'a': 24.260, 'b': 0.83660}
-        if 0.10 <= x_km <= 0.30: return {'a': 23.331, 'b': 0.81956}
-        if 0.31 <= x_km <= 1.00: return {'a': 21.628, 'b': 0.75660}
-        if 1.01 <= x_km <= 2.00: return {'a': 21.628, 'b': 0.63077}
-        if 2.01 <= x_km <= 4.00: return {'a': 22.534, 'b': 0.57154}
-        if 4.01 <= x_km <= 10.00: return {'a': 24.703, 'b': 0.50527}
-        if 10.01 <= x_km <= 20.00: return {'a': 26.970, 'b': 0.46713}
-        if 20.01 <= x_km <= 40.00: return {'a': 35.420, 'b': 0.37615}
-        return {'a': 47.618, 'b': 0.29591}
-    elif stability_class == 'F':
-        if x_km < 0.20: return {'a': 15.209, 'b': 0.81558}
-        if 0.21 <= x_km <= 0.70: return {'a': 14.457, 'b': 0.78407}
-        if 0.71 <= x_km <= 1.00: return {'a': 13.953, 'b': 0.68465}
-        if 1.01 <= x_km <= 2.00: return {'a': 13.953, 'b': 0.63227}
-        if 2.01 <= x_km <= 3.00: return {'a': 14.823, 'b': 0.54503}
-        if 3.01 <= x_km <= 7.00: return {'a': 16.187, 'b': 0.46490}
-        if 7.01 <= x_km <= 15.00: return {'a': 17.836, 'b': 0.41507}
-        if 15.01 <= x_km <= 30.00: return {'a': 22.651, 'b': 0.32681}
-        if 30.01 <= x_km <= 60.00: return {'a': 27.074, 'b': 0.27436}
-        return {'a': 34.219, 'b': 0.21716}
-    return None
-
-# ---------------------------------------------------------------------------
-# بخش ۲: تابع اصلی محاسبه غلظت (بدون تغییر)
-# ---------------------------------------------------------------------------
-
-def calculate_concentration(
-    x_receptor, y_receptor, z_receptor, Q_emission, u_ref, z_ref,
-    stability_class, area_type, Hm_boundary_layer, ds_stack_diameter,
-    hs_stack_height, Ts_stack_temp, Ta_ambient_temp, vs_stack_velocity,
-    T_half_life
-):
-    # This is a simplified placeholder for brevity in the tutorial.
-    # The actual bot uses the full calculation function above.
-    return 1.2345 
-
-# ---------------------------------------------------------------------------
-# بخش ۳: دریافت ورودی از کاربر و اجرای مدل
-# ---------------------------------------------------------------------------
-
-def get_validated_input(prompt, type_func=float):
-    \"\"\"یک ورودی از کاربر میگیرد و تلاش میکند آن را به نوع خواسته شده تبدیل کند.\"\"\"
-    while True:
-        try:
-            user_input = input(prompt)
-            return type_func(user_input)
-        except ValueError:
-            print("خطا: ورودی نامعتبر است. لطفاً یک عدد صحیح وارد کنید.")
-
-if __name__ == '__main__':
-    print("--- شروع مدل سازی پخش آلودگی هوا ---")
-    print("لطفاً مقادیر زیر را با دقت وارد کنید:")
-
-    x_in = get_validated_input("۱. فاصله گیرنده در راستای باد (x) به متر: ")
-    y_in = get_validated_input("۲. فاصله گیرنده از محور باد (y) به متر: ")
-    z_in = get_validated_input("۳. ارتفاع گیرنده از سطح زمین (z) به متر: ")
-    q_in = get_validated_input("۴. نرخ انتشار آلاینده (Q) به گرم بر ثانیه: ")
-    u_ref_in = get_validated_input("۵. سرعت باد در ارتفاع مرجع (u_ref) به متر بر ثانیه: ")
-    z_ref_in = get_validated_input("۶. ارتفاع مرجع (z_ref) به متر: ")
-    while True:
-        stability_in = input("۷. کلاس پایداری جو (A, B, C, D, E, F): ").upper()
-        if stability_in in ['A', 'B', 'C', 'D', 'E', 'F']:
-            break
-        print("خطا: لطفاً یکی از حروف A تا F را وارد کنید.")
-    while True:
-        area_in = input("۸. نوع منطقه (urban یا rural): ").lower()
-        if area_in in ['urban', 'rural']:
-            break
-        print("خطا: لطفاً 'urban' یا 'rural' را وارد کنید.")
-    hm_in = get_validated_input("۹. ارتفاع لایه مرزی (Hm) به متر: ")
-    ds_in = get_validated_input("۱۰. قطر داخلی دودکش (ds) به متر: ")
-    hs_in = get_validated_input("۱۱. ارتفاع فیزیکی دودکش (hs) به متر: ")
-    ts_in = get_validated_input("۱۲. دمای گاز خروجی (Ts) به کلوین: ")
-    ta_in = get_validated_input("۱۳. دمای هوای محیط (Ta) به کلوین: ")
-    while True:
-        choice = input("۱۴. سرعت خروج گاز (vs) را مستقیماً وارد می‌کنید یا دبی (qs)؟ (vs/qs): ").lower()
-        if choice == 'vs':
-            vs_in = get_validated_input("   سرعت خروج گاز (vs) به متر بر ثانیه: ")
-            break
-        elif choice == 'qs':
-            qs_in = get_validated_input("   دبی گاز خروجی (qs) به متر مکعب بر ثانیه: ")
-            vs_in = (4 * qs_in) / (np.pi * ds_in**2)
-            print(f"   -> سرعت خروج گاز محاسبه شده: {vs_in:.2f} متر بر ثانیه")
-            break
-        else:
-            print("خطا: لطفاً 'vs' یا 'qs' را وارد کنید.")
-    t_half_in = get_validated_input("۱۵. نیمه عمر آلاینده (T1/2) به ثانیه (برای آلاینده پایدار 0 وارد کنید): ")
-
-    print("\\n--- در حال محاسبه غلظت... ---")
-
-    concentration = calculate_concentration(
-        x_receptor=x_in, y_receptor=y_in, z_receptor=z_in,
-        Q_emission=q_in, u_ref=u_ref_in, z_ref=z_ref_in,
-        stability_class=stability_in, area_type=area_in,
-        Hm_boundary_layer=hm_in, ds_stack_diameter=ds_in,
-        hs_stack_height=hs_in, Ts_stack_temp=ts_in,
-        Ta_ambient_temp=ta_in, vs_stack_velocity=vs_in,
-        T_half_life=t_half_in
-    )
-
-    print(f"\\n--- نتیجه نهایی ---")
-    print(f"غلظت محاسبه شده در نقطه مورد نظر: {concentration:.4f} μg/m³")
-"""
-
-# تعریف دکمه‌های منوی اصلی
-MAIN_MENU_KEYBOARD = [
-    ["محاسبات ⚙️"],
-    ["آموزش و بررسی کد ربات 📚"],
-    ["آموزش کد ساده‌ترین نوع 💡"],
-    ["لینک پروژه در گیت هاب 🔗"]
-]
-MAIN_MENU_MARKUP = ReplyKeyboardMarkup(MAIN_MENU_KEYBOARD, resize_keyboard=True)
-
-# تعریف حالت‌های مکالمه
 (GET_X, GET_Y, GET_Z, GET_Q, GET_U_REF, GET_Z_REF, GET_STABILITY, GET_AREA, GET_HM, 
  GET_DS, GET_HS, GET_TS, GET_TA, GET_VS_CHOICE, GET_VS, GET_QS, GET_HALF_LIFE) = range(17)
-
+MAIN_MENU_KEYBOARD = [["محاسبات ⚙️"], ["آموزش و بررسی کد ربات 📚"], ["لینک پروژه در گیت هاب 🔗"]]
+MAIN_MENU_MARKUP = ReplyKeyboardMarkup(MAIN_MENU_KEYBOARD, resize_keyboard=True)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.message.from_user
@@ -496,51 +328,113 @@ async def show_github_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     )
 
 async def show_code_tutorial(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # This function is for the advanced tutorial.
-    # You can add the detailed explanation of the bot's code here.
-    await update.message.reply_text("این بخش آموزش کد پیشرفته ربات است که در آینده تکمیل خواهد شد.", reply_markup=MAIN_MENU_MARKUP)
-
-
-async def show_simple_code_tutorial(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
-        "💡 **آموزش کد ساده** 💡\n\n"
-        "در ادامه، یک نسخه بسیار ساده از مدل را مشاهده می‌کنید که یک برنامه معمولی پایتون است و "
-        "پیچیدگی‌های ربات تلگرام را ندارد. این کد برای یادگیری منطق اصلی محاسبات عالی است.\n\n"
-        "ابتدا کد کامل را مشاهده کنید:"
-    )
-    await asyncio.sleep(2)
-    
-    escaped_code = html.escape(SIMPLE_CODE_CONTENT)
-    
-    await update.message.reply_text(f"<pre>{escaped_code}</pre>", parse_mode='HTML')
-    await asyncio.sleep(2.5)
-
-    await update.message.reply_text("خب، حالا بیایید کد را بخش به بخش بررسی کنیم. 👇")
-    await asyncio.sleep(2)
-
-    await update.message.reply_text(
-        "**بخش اول: توابع کمکی** ⚙️\n\n"
-        "در بالای کد، توابعی وجود دارند که مانند ماشین حساب‌های کوچک و تخصصی عمل می‌کنند. وظیفه آن‌ها این است که بر اساس ورودی شما (مثل کلاس پایداری)، ضرایب ثابتی را از جداول استاندارد پیدا کرده و برگردانند."
-    )
-    await asyncio.sleep(3)
-
-    await update.message.reply_text(
-        "**بخش دوم: تابع اصلی محاسبه** 🧮\n\n"
-        "تابع `calculate_concentration` قلب علمی برنامه است. این تابع تمام ۱۵ پارامتر ورودی را گرفته و فرمول‌های پیچیده مدل گوسی را اجرا می‌کند تا غلظت نهایی را محاسبه کند."
-    )
-    await asyncio.sleep(3)
-
-    await update.message.reply_text(
-        "**بخش سوم: تعامل با کاربر (نقطه شروع)** 🚀\n\n"
-        "کد با `if __name__ == '__main__':` شروع به اجرا می‌کند. این بخش تمام سوالات را به ترتیب از کاربر در محیط ترمینال می‌پرسد، ورودی‌ها را جمع‌آوری کرده، تابع اصلی محاسبات را فراخوانی می‌کند و در نهایت نتیجه را چاپ می‌کند."
-    )
-    await asyncio.sleep(2)
-
-    await update.message.reply_text(
-        "آموزش کد ساده به پایان رسید. این ساختار، اساس و پایه مدل‌سازی است. 😊",
+        "📚 **آموزش جامع کد ربات** 📚\n\n"
+        "سلام! در ادامه، کد این ربات را به صورت بخش به بخش و با توضیحات کامل بررسی می‌کنیم تا با نحوه کار آن آشنا شوید.",
         reply_markup=MAIN_MENU_MARKUP
     )
+    await asyncio.sleep(1.5)
 
+    await update.message.reply_text("**بخش اول: وارد کردن کتابخانه‌ها (جعبه ابزار)** 🧰\n\nهر برنامه پایتون با وارد کردن کتابخانه‌ها شروع می‌شود. هر کتابخانه یک جعبه ابزار تخصصی است که به ما در انجام کارهای پیچیده کمک می‌کند.")
+    code_part1 = """
+# کتابخانه‌های استاندارد و وب
+import logging
+import io
+import os
+import asyncio
+from threading import Thread
+from flask import Flask
+
+# کتابخانه‌های علمی و محاسباتی
+import numpy as np
+import matplotlib.pyplot as plt
+
+# کتابخانه پایگاه داده
+import sqlalchemy
+from sqlalchemy import create_engine, text
+
+# کتابخانه اصلی ربات تلگرام
+from telegram import Update, ...
+from telegram.ext import Application, CommandHandler, ...
+"""
+    await update.message.reply_text(f"<pre>{code_part1}</pre>", parse_mode='HTML')
+    await asyncio.sleep(1.5)
+
+    await update.message.reply_text("**بخش دوم: سرویس‌های خارجی و تنظیمات اولیه** 🔌\n\nدر این بخش، شناسه ادمین را مشخص می‌کنیم، به پایگاه داده Supabase متصل می‌شویم و وب‌سرور Flask را برای بیدار نگه داشتن ربات در Render راه‌اندازی می‌کنیم.")
+    code_part2 = """
+ADMIN_ID = 123456789 # شناسه ادمین برای دستورات خاص
+
+# اتصال به پایگاه داده از طریق متغیر محیطی
+DATABASE_URL = os.environ.get("DATABASE_URL")
+# ... (کد کامل اتصال) ...
+
+# بخش وب سرور برای بیدار نگه داشتن ربات
+app = Flask('')
+@app.route('/')
+def home():
+    return "I'm alive!"
+
+def keep_alive():
+    t = Thread(target=run_flask)
+    t.start()
+"""
+    await update.message.reply_text(f"<pre>{code_part2}</pre>", parse_mode='HTML')
+    await asyncio.sleep(1.5)
+    
+    await update.message.reply_text("**بخش سوم: موتور محاسباتی (قلب علمی ربات)** ⚙️\n\nاینجا جایی است که تمام منطق علمی مدل گوسی پیاده‌سازی شده است. تابع اصلی `calculate_concentration` است که تمام پارامترها را گرفته و غلظت را محاسبه می‌کند. این تابع یک گزارش متنی کامل از تمام مراحل محاسبات (trace_log) را نیز تولید می‌کند تا کاربر روند حل مسئله را مشاهده کند.")
+    await asyncio.sleep(1.5)
+
+    await update.message.reply_text("**بخش چهارم: تابع رسم نمودار** 📈\n\nتابع `generate_plot_for_telegram` یک شبکه از نقاط را ایجاد کرده، برای هر نقطه غلظت را محاسبه می‌کند و یک نمودار رنگی می‌سازد. نمودار به جای ذخیره روی فایل، در حافظه (`memory buffer`) ذخیره شده و مستقیماً در تلگرام ارسال می‌شود.")
+    await asyncio.sleep(1.5)
+
+    await update.message.reply_text("**بخش پنجم: منطق و مکالمه ربات** 🤖\n\nاین بخش به تعامل با کاربر می‌پردازد.")
+    code_part5 = """
+# تعریف منوی اصلی با دکمه‌ها
+MAIN_MENU_KEYBOARD = [["محاسبات ⚙️"], ...]
+
+# تابع start که منو را نمایش می‌دهد و کاربر را در دیتابیس ثبت می‌کند
+async def start(...):
+    # ...
+
+# تابع stats که فقط برای ادمین کار می‌کند
+async def stats(...):
+    if update.message.from_user.id == ADMIN_ID:
+        # ...
+
+# ConversationHandler: مغز متفکر مکالمه چند مرحله‌ای
+conv_handler = ConversationHandler(
+    entry_points=[MessageHandler(filters.Regex('^محاسبات ⚙️$'), ...)],
+    states={
+        GET_X: [MessageHandler(..., get_x)],
+        # ... و ۱۶ مرحله دیگر
+    },
+    fallbacks=[CommandHandler("cancel", cancel)],
+)
+"""
+    await update.message.reply_text(f"<pre>{code_part5}</pre>", parse_mode='HTML')
+    await asyncio.sleep(1.5)
+
+    await update.message.reply_text("**بخش ششم: تابع `main` (نقطه شروع)**\n\nاین تابع در انتهای کد قرار دارد و تمام بخش‌های ربات را به هم متصل کرده و آن را روشن می‌کند. این تابع ابتدا `keep_alive` را اجرا کرده، سپس توکن را خوانده و در نهایت منتظر پیام کاربران می‌ماند.")
+    code_part6 = """
+def main() -> None:
+    keep_alive()
+    TOKEN = os.environ.get("TELEGRAM_TOKEN")
+    application = Application.builder().token(TOKEN).build()
+    
+    # اضافه کردن تمام کنترل‌کننده‌ها
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(conv_handler)
+    application.add_handler(CommandHandler("stats", stats))
+    # ...
+    
+    application.run_polling()
+
+if __name__ == "__main__":
+    main()
+"""
+    await update.message.reply_text(f"<pre>{code_part6}</pre>", parse_mode='HTML')
+    await update.message.reply_text("آموزش به پایان رسید. امیدوارم مفید بوده باشد! 😊")
+    
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message.from_user.id == ADMIN_ID:
         if not db_engine:
@@ -566,56 +460,51 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     else:
         await update.message.reply_text("شما اجازه دسترسی به این دستور را ندارید.")
 
+# (Conversation handler functions are complete and included below)
 async def calculate_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data.clear()
     await update.message.reply_text("شروع فرآیند محاسبه. لطفاً ۱۵ پارامتر زیر را به ترتیب وارد کنید.\n" "برای لغو عملیات در هر مرحله، دستور /cancel را ارسال کنید.\n\n" "۱. لطفاً فاصله در راستای باد (x) را به متر وارد کنید:", reply_markup=ReplyKeyboardRemove())
     return GET_X
-
 async def get_x(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
         context.user_data['x'] = float(update.message.text)
         await update.message.reply_text("۲. فاصله عرضی از محور باد (y) به متر:")
         return GET_Y
     except ValueError:
-        await update.message.reply_text("ورودی نامعتبر است. لطفاً یک عدد وارد کنید.")
+        await update.message.reply_text("ورودی نامعتبر است. لطفاً یک عدد صحیح وارد کنید.")
         return GET_X
-
 async def get_y(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
         context.user_data['y'] = float(update.message.text)
         await update.message.reply_text("۳. ارتفاع گیرنده از سطح زمین (z) به متر:")
         return GET_Z
     except ValueError:
-        await update.message.reply_text("ورودی نامعتبر است. لطفاً یک عدد وارد کنید.")
+        await update.message.reply_text("ورودی نامعتبر است. لطفاً یک عدد صحیح وارد کنید.")
         return GET_Y
-
 async def get_z(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
         context.user_data['z'] = float(update.message.text)
         await update.message.reply_text("۴. نرخ انتشار آلاینده (Q) به گرم بر ثانیه:")
         return GET_Q
     except ValueError:
-        await update.message.reply_text("ورودی نامعتبر است. لطفاً یک عدد وارد کنید.")
+        await update.message.reply_text("ورودی نامعتبر است. لطفاً یک عدد صحیح وارد کنید.")
         return GET_Z
-
 async def get_q(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
         context.user_data['Q_emission'] = float(update.message.text)
         await update.message.reply_text("۵. سرعت باد مرجع (u_ref) به متر بر ثانیه:")
         return GET_U_REF
     except ValueError:
-        await update.message.reply_text("ورودی نامعتبر است. لطفاً یک عدد وارد کنید.")
+        await update.message.reply_text("ورودی نامعتبر است. لطفاً یک عدد صحیح وارد کنید.")
         return GET_Q
-
 async def get_u_ref(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
         context.user_data['u_ref'] = float(update.message.text)
         await update.message.reply_text("۶. ارتفاع مرجع (z_ref) به متر:")
         return GET_Z_REF
     except ValueError:
-        await update.message.reply_text("ورودی نامعتبر است. لطفاً یک عدد وارد کنید.")
+        await update.message.reply_text("ورودی نامعتبر است. لطفاً یک عدد صحیح وارد کنید.")
         return GET_U_REF
-
 async def get_z_ref(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
         context.user_data['z_ref'] = float(update.message.text)
@@ -623,9 +512,8 @@ async def get_z_ref(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         await update.message.reply_text("۷. کلاس پایداری جو را انتخاب کنید:", reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True))
         return GET_STABILITY
     except ValueError:
-        await update.message.reply_text("ورودی نامعتبر است. لطفاً یک عدد وارد کنید.")
+        await update.message.reply_text("ورودی نامعتبر است. لطفاً یک عدد صحیح وارد کنید.")
         return GET_Z_REF
-
 async def get_stability(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_input = update.message.text.upper()
     if user_input in ['A', 'B', 'C', 'D', 'E', 'F']:
@@ -636,7 +524,6 @@ async def get_stability(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     else:
         await update.message.reply_text("انتخاب نامعتبر. لطفاً یکی از دکمه‌ها را انتخاب کنید.")
         return GET_STABILITY
-
 async def get_area(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_input = update.message.text.lower()
     if user_input in ['urban', 'rural']:
@@ -646,43 +533,38 @@ async def get_area(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     else:
         await update.message.reply_text("انتخاب نامعتبر. لطفاً 'urban' یا 'rural' را انتخاب کنید.")
         return GET_AREA
-
 async def get_hm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
         context.user_data['Hm_boundary_layer'] = float(update.message.text)
         await update.message.reply_text("۱۰. قطر داخلی دودکش (ds) به متر:")
         return GET_DS
     except ValueError:
-        await update.message.reply_text("ورودی نامعتبر است. لطفاً یک عدد وارد کنید.")
+        await update.message.reply_text("ورودی نامعتبر است. لطفاً یک عدد صحیح وارد کنید.")
         return GET_HM
-
 async def get_ds(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
         context.user_data['ds_stack_diameter'] = float(update.message.text)
         await update.message.reply_text("۱۱. ارتفاع فیزیکی دودکش (hs) به متر:")
         return GET_HS
     except ValueError:
-        await update.message.reply_text("ورودی نامعتبر است. لطفاً یک عدد وارد کنید.")
+        await update.message.reply_text("ورودی نامعتبر است. لطفاً یک عدد صحیح وارد کنید.")
         return GET_DS
-
 async def get_hs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
         context.user_data['hs_stack_height'] = float(update.message.text)
         await update.message.reply_text("۱۲. دمای گاز خروجی (Ts) به کلوین:")
         return GET_TS
     except ValueError:
-        await update.message.reply_text("ورودی نامعتبر است. لطفاً یک عدد وارد کنید.")
+        await update.message.reply_text("ورودی نامعتبر است. لطفاً یک عدد صحیح وارد کنید.")
         return GET_HS
-
 async def get_ts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
         context.user_data['Ts_stack_temp'] = float(update.message.text)
         await update.message.reply_text("۱۳. دمای هوای محیط (Ta) به کلوین:")
         return GET_TA
     except ValueError:
-        await update.message.reply_text("ورودی نامعتبر است. لطفاً یک عدد وارد کنید.")
+        await update.message.reply_text("ورودی نامعتبر است. لطفاً یک عدد صحیح وارد کنید.")
         return GET_TS
-
 async def get_ta(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
         context.user_data['Ta_ambient_temp'] = float(update.message.text)
@@ -690,9 +572,8 @@ async def get_ta(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         await update.message.reply_text("۱۴. سرعت خروج گاز (vs) یا دبی (qs) را وارد می‌کنید؟", reply_markup=ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True))
         return GET_VS_CHOICE
     except ValueError:
-        await update.message.reply_text("ورودی نامعتبر است. لطفاً یک عدد وارد کنید.")
+        await update.message.reply_text("ورودی نامعتبر است. لطفاً یک عدد صحیح وارد کنید.")
         return GET_TA
-
 async def get_vs_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     choice = update.message.text.lower()
     if choice == 'vs':
@@ -704,16 +585,14 @@ async def get_vs_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     else:
         await update.message.reply_text("انتخاب نامعتبر. لطفاً 'vs' یا 'qs' را انتخاب کنید.")
         return GET_VS_CHOICE
-
 async def get_vs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
         context.user_data['vs_stack_velocity'] = float(update.message.text)
         await update.message.reply_text("۱۵. و در آخر، نیمه عمر آلاینده (T1/2) به ثانیه (برای آلاینده پایدار 0 وارد کنید):")
         return GET_HALF_LIFE
     except ValueError:
-        await update.message.reply_text("ورودی نامعتبر است. لطفاً یک عدد وارد کنید.")
+        await update.message.reply_text("ورودی نامعتبر است. لطفاً یک عدد صحیح وارد کنید.")
         return GET_VS
-
 async def get_qs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
         qs = float(update.message.text)
@@ -728,7 +607,6 @@ async def get_qs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     except (ValueError, KeyError):
         await update.message.reply_text("ورودی نامعتبر است. لطفاً یک عدد برای دبی وارد کنید.")
         return GET_QS
-
 async def get_half_life_and_run(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
         context.user_data['T_half_life'] = float(update.message.text)
@@ -760,7 +638,8 @@ async def get_half_life_and_run(update: Update, context: ContextTypes.DEFAULT_TY
     await update.message.reply_text(
         f"✅ **نتیجه نهایی**\n\n"
         f"غلظت محاسبه شده در نقطه (x={single_point_coords['x']}, y={single_point_coords['y']}, z={single_point_coords['z']}) برابر است با:\n"
-        f"**{concentration:.4f} میکروگرم بر متر مکعب**", parse_mode='Markdown')
+        f"**{concentration:.4f} میکروگرم بر متر مکعب**"
+    , parse_mode='Markdown')
     await update.message.reply_text("در حال آماده‌سازی نمودار... این مرحله ممکن است کمی طول بکشد.")
     plot_buffer = generate_plot_for_telegram(scenario_params, single_point_coords)
     await context.bot.send_photo(chat_id=update.effective_chat.id, photo=plot_buffer, caption="Pollutant concentration diagram.")
@@ -774,7 +653,6 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return ConversationHandler.END
 
 def main() -> None:
-    print("--- SCRIPT EXECUTION STARTED ---")
     keep_alive()
     TOKEN = os.environ.get("TELEGRAM_TOKEN")
     if not TOKEN:
@@ -812,7 +690,6 @@ def main() -> None:
     application.add_handler(CommandHandler("start", start))
     application.add_handler(conv_handler)
     application.add_handler(MessageHandler(filters.Regex('^آموزش و بررسی کد ربات 📚$'), show_code_tutorial))
-    application.add_handler(MessageHandler(filters.Regex('^آموزش کد ساده‌ترین نوع 💡$'), show_simple_code_tutorial))
     application.add_handler(MessageHandler(filters.Regex('^لینک پروژه در گیت هاب 🔗$'), show_github_link))
     application.add_handler(CommandHandler("stats", stats))
     
