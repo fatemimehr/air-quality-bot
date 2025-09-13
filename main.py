@@ -496,8 +496,10 @@ async def show_github_link(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     )
 
 async def show_code_tutorial(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # ... (This function is for the advanced tutorial and remains unchanged)
-    pass
+    # This function is for the advanced tutorial.
+    # You can add the detailed explanation of the bot's code here.
+    await update.message.reply_text("این بخش آموزش کد پیشرفته ربات است که در آینده تکمیل خواهد شد.", reply_markup=MAIN_MENU_MARKUP)
+
 
 async def show_simple_code_tutorial(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
@@ -587,7 +589,6 @@ async def get_y(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         await update.message.reply_text("ورودی نامعتبر است. لطفاً یک عدد وارد کنید.")
         return GET_Y
 
-# ... (تمام توابع get_z تا get_half_life_and_run مثل قبل هستند)
 async def get_z(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
         context.user_data['z'] = float(update.message.text)
