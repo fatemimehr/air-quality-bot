@@ -1,0 +1,317 @@
+import numpy as np
+
+# ---------------------------------------------------------------------------
+# بخش ۱: توابع کمکی برای محاسبات مدل (بدون تغییر)
+# ---------------------------------------------------------------------------
+
+def get_rural_pasquill_gifford_params_c_d(stability_class):
+    """
+    (گام سوم)
+    ضرایب c و d را برای محاسبه سیگما-وای در مناطق حومه‌ای برمی‌گرداند.
+    """
+    params = {
+        'A': {'c': 24.1670, 'd': 2.5334},
+        'B': {'c': 18.3330, 'd': 1.8096},
+        'C': {'c': 12.5000, 'd': 1.0857},
+        'D': {'c': 8.3330,  'd': 0.72382},
+        'E': {'c': 6.2500,  'd': 0.54287},
+        'F': {'c': 4.1667,  'd': 0.36191}
+    }
+    return params.get(stability_class)
+
+def get_rural_sigma_z_params_a_b(stability_class, x_km):
+    """
+    (گام پنجم)
+    ضرایب a و b را برای محاسبه سیگما-زد در مناطق حومه‌ای بر اساس فاصله برمی‌گرداند.
+    """
+    if stability_class == 'A':
+        if x_km < 0.10: return {'a': 122.800, 'b': 0.94470}
+        if 0.10 <= x_km <= 0.15: return {'a': 158.080, 'b': 1.05420}
+        if 0.16 <= x_km <= 0.20: return {'a': 170.220, 'b': 1.09320}
+        if 0.21 <= x_km <= 0.25: return {'a': 179.520, 'b': 1.12620}
+        if 0.26 <= x_km <= 0.30: return {'a': 217.410, 'b': 1.26440}
+        if 0.31 <= x_km <= 0.40: return {'a': 258.890, 'b': 1.40940}
+        if 0.41 <= x_km <= 0.50: return {'a': 346.750, 'b': 1.72830}
+        if 0.51 <= x_km <= 3.11: return {'a': 453.850, 'b': 2.11660}
+        return None
+    elif stability_class == 'B':
+        if x_km < 0.20: return {'a': 90.673, 'b': 0.93198}
+        if 0.21 <= x_km <= 0.40: return {'a': 98.483, 'b': 0.98332}
+        return {'a': 109.300, 'b': 1.09710}
+    elif stability_class == 'C':
+        return {'a': 61.141, 'b': 0.91465}
+    elif stability_class == 'D':
+        if x_km < 0.30: return {'a': 34.459, 'b': 0.86974}
+        if 0.31 <= x_km <= 1.00: return {'a': 32.093, 'b': 0.81066}
+        if 1.01 <= x_km <= 3.00: return {'a': 32.093, 'b': 0.64403}
+        if 3.01 <= x_km <= 10.00: return {'a': 33.504, 'b': 0.60486}
+        if 10.01 <= x_km <= 30.00: return {'a': 36.650, 'b': 0.56589}
+        return {'a': 44.053, 'b': 0.51179}
+    elif stability_class == 'E':
+        if x_km < 0.10: return {'a': 24.260, 'b': 0.83660}
+        if 0.10 <= x_km <= 0.30: return {'a': 23.331, 'b': 0.81956}
+        if 0.31 <= x_km <= 1.00: return {'a': 21.628, 'b': 0.75660}
+        if 1.01 <= x_km <= 2.00: return {'a': 21.628, 'b': 0.63077}
+        if 2.01 <= x_km <= 4.00: return {'a': 22.534, 'b': 0.57154}
+        if 4.01 <= x_km <= 10.00: return {'a': 24.703, 'b': 0.50527}
+        if 10.01 <= x_km <= 20.00: return {'a': 26.970, 'b': 0.46713}
+        if 20.01 <= x_km <= 40.00: return {'a': 35.420, 'b': 0.37615}
+        return {'a': 47.618, 'b': 0.29591}
+    elif stability_class == 'F':
+        if x_km < 0.20: return {'a': 15.209, 'b': 0.81558}
+        if 0.21 <= x_km <= 0.70: return {'a': 14.457, 'b': 0.78407}
+        if 0.71 <= x_km <= 1.00: return {'a': 13.953, 'b': 0.68465}
+        if 1.01 <= x_km <= 2.00: return {'a': 13.953, 'b': 0.63227}
+        if 2.01 <= x_km <= 3.00: return {'a': 14.823, 'b': 0.54503}
+        if 3.01 <= x_km <= 7.00: return {'a': 16.187, 'b': 0.46490}
+        if 7.01 <= x_km <= 15.00: return {'a': 17.836, 'b': 0.41507}
+        if 15.01 <= x_km <= 30.00: return {'a': 22.651, 'b': 0.32681}
+        if 30.01 <= x_km <= 60.00: return {'a': 27.074, 'b': 0.27436}
+        return {'a': 34.219, 'b': 0.21716}
+    return None
+
+# ---------------------------------------------------------------------------
+# بخش ۲: تابع اصلی محاسبه غلظت (بدون تغییر)
+# ---------------------------------------------------------------------------
+
+def calculate_concentration(
+    x_receptor, y_receptor, z_receptor, Q_emission, u_ref, z_ref,
+    stability_class, area_type, Hm_boundary_layer, ds_stack_diameter,
+    hs_stack_height, Ts_stack_temp, Ta_ambient_temp, vs_stack_velocity,
+    T_half_life
+):
+    # ... (متن کامل این تابع همانند پاسخ قبلی است و برای جلوگیری از طولانی شدن حذف شده)
+    # ... (The full body of this function is the same as the previous answer and is omitted for brevity)
+    # ثابت‌ها
+    g = 9.8  # m/s^2
+    
+    if x_receptor <= 0:
+        print("هشدار: فاصله در راستای باد (x) باید مثبت باشد.")
+        return 0.0
+
+    # --- گام دوم: محاسبه سرعت باد در ارتفاع دودکش (Us) ---
+    p_exponent_map = {
+        'rural': {'A': 0.07, 'B': 0.07, 'C': 0.10, 'D': 0.15, 'E': 0.35, 'F': 0.55},
+        'urban': {'A': 0.15, 'B': 0.15, 'C': 0.20, 'D': 0.25, 'E': 0.30, 'F': 0.30}
+    }
+    p = p_exponent_map[area_type][stability_class]
+    us = u_ref * (hs_stack_height / z_ref) ** p
+    if us == 0: us = 1e-6 # جلوگیری از تقسیم بر صفر
+
+    # --- گام سوم و چهارم: محاسبه شرطی سیگما-وای (σy) ---
+    x_km = x_receptor / 1000.0
+    if area_type == 'rural':
+        params = get_rural_pasquill_gifford_params_c_d(stability_class)
+        theta = 0.017453293 * (params['c'] - params['d'] * np.log(x_km))
+        sigma_y = 465.11628 * x_km * np.tan(theta)
+    else: # urban
+        factor = (1.0 + 0.0004 * x_receptor) ** -0.5
+        if stability_class in ['A', 'B']:
+            sigma_y = 0.32 * x_receptor * factor
+        elif stability_class == 'C':
+            sigma_y = 0.22 * x_receptor * factor
+        elif stability_class == 'D':
+            sigma_y = 0.16 * x_receptor * factor
+        else: # E, F
+            sigma_y = 0.11 * x_receptor * factor
+
+    # --- گام پنجم و ششم: محاسبه شرطی سیگما-زد (σz) ---
+    if area_type == 'rural':
+        if stability_class == 'A' and x_km > 3.11:
+            sigma_z = 5000.0
+        else:
+            params = get_rural_sigma_z_params_a_b(stability_class, x_km)
+            sigma_z = params['a'] * (x_km ** params['b'])
+        
+        if stability_class in ['A', 'B', 'C']:
+            sigma_z = min(sigma_z, 5000.0)
+    else: # urban
+        if stability_class in ['A', 'B']:
+            sigma_z = 0.24 * x_receptor * (1.0 + 0.001 * x_receptor) ** 0.5
+        elif stability_class == 'C':
+            sigma_z = 0.20 * x_receptor
+        elif stability_class == 'D':
+            sigma_z = 0.14 * x_receptor * (1.0 + 0.0003 * x_receptor) ** -0.5
+        else: # E, F
+            sigma_z = 0.08 * x_receptor * (1.0 + 0.0015 * x_receptor) ** -0.5
+
+    # --- گام هفتم: محاسبه ارتفاع موثر دودکش (he) ---
+    delta_T = Ts_stack_temp - Ta_ambient_temp
+    Fb = g * vs_stack_velocity * (ds_stack_diameter**2) * (delta_T / (4 * Ts_stack_temp))
+    is_stable = stability_class in ['E', 'F']
+    if is_stable:
+        s = 0.035 if stability_class == 'F' else 0.020
+        delta_T_c = 0.01958 * Ts_stack_temp * vs_stack_velocity * np.sqrt(s)
+    else:
+        if Fb >= 55:
+            delta_T_c = 0.00575 * Ts_stack_temp * (vs_stack_velocity**(2/3)) / (ds_stack_diameter**(1/3))
+        else:
+            delta_T_c = 0.0297 * Ts_stack_temp * (vs_stack_velocity**(1/3)) / (ds_stack_diameter**(2/3))
+    is_buoyancy_dominated = delta_T > delta_T_c
+    if is_stable:
+        s = 0.035 if stability_class == 'F' else 0.020
+        if is_buoyancy_dominated:
+            delta_h = 2.6 * (Fb / (us * s))**(1/3)
+        else:
+            delta_h = 3 * ds_stack_diameter * vs_stack_velocity / us
+        xf = 2.075 * us / np.sqrt(s)
+    else:
+        if is_buoyancy_dominated:
+            if Fb >= 55:
+                delta_h = 38.71 * (Fb**0.6) / us
+                xf = 119 * (Fb**0.4)
+            else:
+                delta_h = 21.25 * (Fb**0.75) / us
+                xf = 49 * (Fb**(5/8))
+        else:
+            delta_h = 3 * ds_stack_diameter * vs_stack_velocity / us
+            if Fb >= 55:
+                xf = 119 * (Fb**0.4)
+            else:
+                xf = 49 * (Fb**(5/8))
+
+    if vs_stack_velocity < 1.5 * us:
+        h_prime_s = hs_stack_height + 2 * ds_stack_diameter * ((vs_stack_velocity / us) - 1.5)
+    else:
+        h_prime_s = hs_stack_height
+
+    if x_receptor >= xf:
+        he = h_prime_s + delta_h
+    else:
+        if is_buoyancy_dominated:
+            he = h_prime_s + 1.6 * ((Fb * x_receptor**2) / us**3)**(1/3)
+        else:
+            Fm = (vs_stack_velocity**2) * (ds_stack_diameter**2) * (Ta_ambient_temp / (4 * Ts_stack_temp))
+            beta_j = (1/3) + (us / vs_stack_velocity)
+            if is_stable:
+                he = h_prime_s + 1.6 * ((Fm * x_receptor**2) / (beta_j**2 * us**2))**(1/3)
+            else:
+                he = h_prime_s + ((3 * Fm * x_receptor) / (beta_j**2 * us**2))**(1/3)
+
+    # --- گام نهم: محاسبه سیگماهای موثر (σye, σze) ---
+    sigma_ye = np.sqrt(sigma_y**2 + (delta_h / 3.5)**2)
+    sigma_ze = np.sqrt(sigma_z**2 + (delta_h / 3.5)**2)
+    
+    # --- گام هشتم: محاسبه جمله قائم (V) ---
+    if sigma_ze == 0: sigma_ze = 1e-6
+
+    term1 = np.exp(-0.5 * ((z_receptor - he) / sigma_ze)**2)
+    term2 = np.exp(-0.5 * ((z_receptor + he) / sigma_ze)**2)
+    V = term1 + term2
+    summation_term = 0
+    for i in range(1, 6):
+        H1 = z_receptor - (2 * i * Hm_boundary_layer - he)
+        H2 = z_receptor + (2 * i * Hm_boundary_layer - he)
+        H3 = z_receptor - (2 * i * Hm_boundary_layer + he)
+        H4 = z_receptor + (2 * i * Hm_boundary_layer + he)
+        
+        summation_term += (np.exp(-0.5 * (H1 / sigma_ze)**2) +
+                           np.exp(-0.5 * (H2 / sigma_ze)**2) +
+                           np.exp(-0.5 * (H3 / sigma_ze)**2) +
+                           np.exp(-0.5 * (H4 / sigma_ze)**2))
+    V += summation_term
+    
+    # --- گام دهم: محاسبه جمله زوال (D) ---
+    if T_half_life > 0:
+        psi = 0.693 / T_half_life
+        D = np.exp(-psi * x_receptor / us)
+    else:
+        D = 1.0
+        
+    # --- گام نهایی: محاسبه غلظت (C) ---
+    K = 1e6
+    if sigma_ye == 0: sigma_ye = 1e-6
+    lateral_term = np.exp(-0.5 * (y_receptor / sigma_ye)**2)
+    denominator = 2 * np.pi * us * sigma_ye * sigma_ze
+    if denominator == 0: return np.inf
+    
+    C = (Q_emission * K * V * D / denominator) * lateral_term
+    
+    return C
+
+# ---------------------------------------------------------------------------
+# بخش ۳: دریافت ورودی از کاربر و اجرای مدل
+# ---------------------------------------------------------------------------
+
+def get_validated_input(prompt, type_func=float):
+    """یک ورودی از کاربر میگیرد و تلاش میکند آن را به نوع خواسته شده تبدیل کند."""
+    while True:
+        try:
+            user_input = input(prompt)
+            return type_func(user_input)
+        except ValueError:
+            print("خطا: ورودی نامعتبر است. لطفاً یک عدد صحیح وارد کنید.")
+
+if __name__ == '__main__':
+    print("--- شروع مدل سازی پخش آلودگی هوا ---")
+    print("لطفاً مقادیر زیر را با دقت وارد کنید:")
+
+    # ۱- مختصات نقطه
+    x_in = get_validated_input("۱. فاصله گیرنده در راستای باد (x) به متر: ")
+    y_in = get_validated_input("۲. فاصله گیرنده از محور باد (y) به متر: ")
+    z_in = get_validated_input("۳. ارتفاع گیرنده از سطح زمین (z) به متر: ")
+
+    # ۲- نرخ انتشار
+    q_in = get_validated_input("۴. نرخ انتشار آلاینده (Q) به گرم بر ثانیه: ")
+
+    # ۳ و ۴- شرایط باد
+    u_ref_in = get_validated_input("۵. سرعت باد در ارتفاع مرجع (u_ref) به متر بر ثانیه: ")
+    z_ref_in = get_validated_input("۶. ارتفاع مرجع (z_ref) به متر: ")
+
+    # ۵- کلاس پایداری
+    while True:
+        stability_in = input("۷. کلاس پایداری جو (A, B, C, D, E, F): ").upper()
+        if stability_in in ['A', 'B', 'C', 'D', 'E', 'F']:
+            break
+        print("خطا: لطفاً یکی از حروف A تا F را وارد کنید.")
+
+    # ۶- نوع منطقه
+    while True:
+        area_in = input("۸. نوع منطقه (urban یا rural): ").lower()
+        if area_in in ['urban', 'rural']:
+            break
+        print("خطا: لطفاً 'urban' یا 'rural' را وارد کنید.")
+
+    # ۷- ارتفاع لایه مرزی
+    hm_in = get_validated_input("۹. ارتفاع لایه مرزی (Hm) به متر: ")
+
+    # ۸- مشخصات دودکش
+    ds_in = get_validated_input("۱۰. قطر داخلی دودکش (ds) به متر: ")
+    hs_in = get_validated_input("۱۱. ارتفاع فیزیکی دودکش (hs) به متر: ")
+
+    # ۹- دماها
+    ts_in = get_validated_input("۱۲. دمای گاز خروجی (Ts) به کلوین: ")
+    ta_in = get_validated_input("۱۳. دمای هوای محیط (Ta) به کلوین: ")
+    
+    # ۱۰- سرعت خروج گاز
+    while True:
+        choice = input("۱۴. سرعت خروج گاز (vs) را مستقیماً وارد می‌کنید یا دبی (qs)؟ (vs/qs): ").lower()
+        if choice == 'vs':
+            vs_in = get_validated_input("   سرعت خروج گاز (vs) به متر بر ثانیه: ")
+            break
+        elif choice == 'qs':
+            qs_in = get_validated_input("   دبی گاز خروجی (qs) به متر مکعب بر ثانیه: ")
+            vs_in = (4 * qs_in) / (np.pi * ds_in**2)
+            print(f"   -> سرعت خروج گاز محاسبه شده: {vs_in:.2f} متر بر ثانیه")
+            break
+        else:
+            print("خطا: لطفاً 'vs' یا 'qs' را وارد کنید.")
+
+    # ۱۱- نیمه عمر
+    t_half_in = get_validated_input("۱۵. نیمه عمر آلاینده (T1/2) به ثانیه (برای آلاینده پایدار 0 وارد کنید): ")
+
+    print("\n--- در حال محاسبه غلظت... ---")
+
+    # فراخوانی تابع اصلی با ورودی‌های کاربر
+    concentration = calculate_concentration(
+        x_receptor=x_in, y_receptor=y_in, z_receptor=z_in,
+        Q_emission=q_in, u_ref=u_ref_in, z_ref=z_ref_in,
+        stability_class=stability_in, area_type=area_in,
+        Hm_boundary_layer=hm_in, ds_stack_diameter=ds_in,
+        hs_stack_height=hs_in, Ts_stack_temp=ts_in,
+        Ta_ambient_temp=ta_in, vs_stack_velocity=vs_in,
+        T_half_life=t_half_in
+    )
+
+    print(f"\n--- نتیجه نهایی ---")
+    print(f"غلظت محاسبه شده در نقطه مورد نظر: {concentration:.4f} μg/m³")
