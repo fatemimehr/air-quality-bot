@@ -608,41 +608,77 @@ async def get_qs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         await update.message.reply_text("ورودی نامعتبر است. لطفاً یک عدد برای دبی وارد کنید.")
         return GET_QS
 async def get_half_life_and_run(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """
+    Gets the final input, validates it, and then runs all calculations and plotting.
+    This version includes robust error handling to prevent freezing.
+    """
     try:
-        context.user_data['T_half_life'] = float(update.message.text)
+        # Step 1: Get and validate the final input
+        half_life_input = float(update.message.text)
+        if half_life_input < 0:
+            await update.message.reply_text("نیمه عمر نمی‌تواند یک عدد منفی باشد. لطفاً یک عدد مثبت یا صفر وارد کنید.")
+            return GET_HALF_LIFE # Stay in the same state
+        
+        context.user_data['T_half_life'] = half_life_input
+
     except ValueError:
         await update.message.reply_text("ورودی نامعتبر است. لطفاً یک عدد برای نیمه عمر وارد کنید.")
         return GET_HALF_LIFE
-    await update.message.reply_text("تمام ورودی‌ها دریافت شد. لطفاً برای انجام محاسبات صبر کنید...", reply_markup=ReplyKeyboardRemove())
-    single_point_coords = {'x': context.user_data.pop('x'), 'y': context.user_data.pop('y'), 'z': context.user_data.pop('z')}
-    scenario_params = context.user_data
-    scenario_params.pop('current_state', None)
-    
-    if db_engine:
-        try:
-            with db_engine.connect() as connection:
-                upsert_query = text("""
-                    INSERT INTO stats (key, value) VALUES ('calculation_count', '1')
-                    ON CONFLICT (key) DO UPDATE SET value = (SELECT (value::integer + 1)::text FROM stats WHERE key = 'calculation_count');
-                """)
-                connection.execute(upsert_query)
-                connection.commit()
-        except Exception as e:
-            logger.error(f"Error updating calculation stats: {e}")
 
-    concentration, trace_report = calculate_concentration(
-        x_receptor=single_point_coords['x'], y_receptor=single_point_coords['y'], z_receptor=single_point_coords['z'],
-        **scenario_params
-    )
-    await update.message.reply_text(f"📝 **گزارش گام به گام محاسبات:**\n\n`{trace_report}`", parse_mode='Markdown')
-    await update.message.reply_text(
-        f"✅ **نتیجه نهایی**\n\n"
-        f"غلظت محاسبه شده در نقطه (x={single_point_coords['x']}, y={single_point_coords['y']}, z={single_point_coords['z']}) برابر است با:\n"
-        f"**{concentration:.4f} میکروگرم بر متر مکعب**"
-    , parse_mode='Markdown')
-    await update.message.reply_text("در حال آماده‌سازی نمودار... این مرحله ممکن است کمی طول بکشد.")
-    plot_buffer = generate_plot_for_telegram(scenario_params, single_point_coords)
-    await context.bot.send_photo(chat_id=update.effective_chat.id, photo=plot_buffer, caption="Pollutant concentration diagram.")
+    await update.message.reply_text("تمام ورودی‌ها دریافت شد. لطفاً برای انجام محاسبات صبر کنید...", reply_markup=ReplyKeyboardRemove())
+    
+    # --- Start of the main calculation block ---
+    try:
+        # Prepare parameters for calculation
+        single_point_coords = {'x': context.user_data.pop('x'), 'y': context.user_data.pop('y'), 'z': context.user_data.pop('z')}
+        scenario_params = context.user_data
+        scenario_params.pop('current_state', None) # Clean up internal variable
+
+        # --- Run scientific calculation and get results ---
+        concentration, trace_report = calculate_concentration(
+            x_receptor=single_point_coords['x'], y_receptor=single_point_coords['y'], z_receptor=single_point_coords['z'],
+            **scenario_params
+        )
+        
+        # --- Send results back to user ---
+        # 1. Send the detailed trace
+        await update.message.reply_text(f"📝 **گزارش گام به گام محاسبات:**\n\n`{trace_report}`", parse_mode='Markdown')
+        
+        # 2. Send the final concentration
+        await update.message.reply_text(
+            f"✅ **نتیجه نهایی**\n\n"
+            f"غلظت محاسبه شده در نقطه (x={single_point_coords['x']}, y={single_point_coords['y']}, z={single_point_coords['z']}) برابر است با:\n"
+            f"**{concentration:.4f} میکروگرم بر متر مکعب**",
+            parse_mode='Markdown'
+        )
+
+        # 3. Generate and send the plot
+        await update.message.reply_text("در حال آماده‌سازی نمودار... این مرحله ممکن است کمی طول بکشد.")
+        plot_buffer = generate_plot_for_telegram(scenario_params, single_point_coords)
+        await context.bot.send_photo(chat_id=update.effective_chat.id, photo=plot_buffer, caption="Pollutant concentration diagram.")
+
+        # --- Update statistics ---
+        if db_engine:
+            try:
+                with db_engine.connect() as connection:
+                    upsert_query = text("""
+                        INSERT INTO stats (key, value) VALUES ('calculation_count', '1')
+                        ON CONFLICT (key) DO UPDATE SET value = (SELECT (value::integer + 1)::text FROM stats WHERE key = 'calculation_count');
+                    """)
+                    connection.execute(upsert_query)
+                    connection.commit()
+            except Exception as e:
+                logger.error(f"Error updating calculation stats: {e}")
+
+    except Exception as e:
+        # --- Catch any unexpected error during the entire process ---
+        logger.error(f"An error occurred during calculation/plotting: {e}", exc_info=True)
+        await update.message.reply_text(
+            f"متاسفانه یک خطای غیرمنتظره در حین انجام محاسبات رخ داد. لطفاً ورودی‌های خود را بررسی کنید.\n\n"
+            f"**جزئیات فنی خطا:**\n`{e}`"
+        )
+
+    # --- End of conversation ---
     await update.message.reply_text("محاسبه کامل شد! برای بازگشت به منوی اصلی، دستور /start را ارسال کنید.", reply_markup=MAIN_MENU_MARKUP)
     context.user_data.clear()
     return ConversationHandler.END
